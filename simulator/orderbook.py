@@ -1,124 +1,178 @@
-from collections import deque  
-from dataclasses import dataclass  
+from collections import deque
+from dataclasses import dataclass
 import time
-from typing import Optional 
+import heapq
+from typing import Optional, Dict, Deque, List, Tuple
 
 @dataclass
 class Order:
-    id : int
-    side: str
-    qty : float
-    price: Optional[float]
+    id: int
+    side: str                
+    qty: float
+    price: Optional[float]   
     timestamp: float
 
 @dataclass
 class Trade:
-    time : float
+    time: float
     taker_order_id: Optional[int]
     maker_order_id: Optional[int]
     price: float
     qty: float
     taker_side: str
-    
+
 class OrderBook:
     def __init__(self):
-        self.bids = {}
-        self.asks = {}
-        self.trades = []
-        self.next_order_id = 1
-
-    def add_limit_order(self, order: Order):
-       
-        order = Order(
-            id = self.next_order_id,
-            side = side,
-            qty = qty,
-            price = price,
-            timestamp = timestamp
-        )
-        self.next_order_id += 1
         
-        book = self.bids if order.side == "buy" else self.asks 
-        if price not in book:
+        self.bids: Dict[float, Deque[Order]] = {}
+        self.asks: Dict[float, Deque[Order]] = {}
+
+        
+        self.trades: List[Trade] = []
+
+        
+        self.next_order_id: int = 1
+
+        
+        self.bid_heap: List[float] = []
+        self.ask_heap: List[float] = []
+
+        
+        self.order_index: Dict[int, Tuple[str, Optional[float]]] = {}
+
+    # ---------------- helper heap ----------------
+    def push_price(self, side: str, price: float) -> None:
+        if side == "buy":  
+            heapq.heappush(self.bid_heap, -price)
+        else:
+            heapq.heappush(self.ask_heap, price)
+
+    def clean_top_price(self, side: str) -> None:
+        if side == "buy":
+            while self.bid_heap:
+                price = -self.bid_heap[0]         
+                if price in self.bids and self.bids[price]:
+                    break
+                heapq.heappop(self.bid_heap)
+        else:
+            while self.ask_heap:
+                price = self.ask_heap[0]
+                if price in self.asks and self.asks[price]:
+                    break
+                heapq.heappop(self.ask_heap)
+
+    def best_price_heap(self, side: str) -> Optional[float]:
+        self.clean_top_price(side)
+        if side == "buy":
+            return -self.bid_heap[0] if self.bid_heap else None
+        else:
+            return self.ask_heap[0] if self.ask_heap else None
+
+    def add_limit_order(self, side: str, qty: float, price: float, timestamp: Optional[float] = None) -> Order:
+        assert side in ("buy", "sell")
+        timestamp = timestamp if timestamp is not None else time.time()
+
+        order = Order(id=self.next_order_id, side=side, qty=qty, price=price, timestamp=timestamp)
+        self.next_order_id += 1
+
+        book = self.bids if side == "buy" else self.asks
+        is_new_level = price not in book
+        if is_new_level:
             book[price] = deque()
         book[price].append(order)
-  
-    def best_bid(self):
-        return max(self.bids.keys()) if self.bids else None
 
-    def best_ask(self):
-        return min(self.asks.keys()) if self.asks else None
+        self.order_index[order.id] = (side, price)
 
-    def mid_price(self):
-        if self.best_bid() is not None and self.best_ask() is not None:
-            return (self.best_bid() + self.best_ask()) / 2
-        return None
- 
-    def spread(self):
-        if self.best_bid() is not None and self.best_ask() is not None:
-            return self.best_ask() - self.best_bid()
-        return None
-  
-    def market_order(self, side: str, qty: float, timestamp: float):
-    
-        order = Order(
-            id = self.next_order_id,
-            side = side,
-            qty = qty,
-            price = None,  # market order no tiene precio
-            timestamp = timestamp
-        )
+        if is_new_level:
+            self.push_price(side, price)
+
+        return order
+
+    def best_bid(self) -> Optional[float]:
+        return self.best_price_heap("buy")
+
+    def best_ask(self) -> Optional[float]:
+        return self.best_price_heap("sell")
+
+    def mid_price(self) -> Optional[float]:
+        b = self.best_bid()
+        a = self.best_ask()
+        if b is None or a is None:
+            return None
+        return (a + b) / 2.0
+
+    def spread(self) -> Optional[float]:
+        b = self.best_bid()
+        a = self.best_ask()
+        if b is None or a is None:
+            return None
+        return a - b
+
+    def market_order(self, side: str, qty: float, timestamp: Optional[float] = None) -> Order:
+        assert side in ("buy", "sell")
+        timestamp = timestamp if timestamp is not None else time.time()
+
+        order = Order(id=self.next_order_id, side=side, qty=qty, price=None, timestamp=timestamp)
         self.next_order_id += 1
-    
+
         book = self.asks if side == "buy" else self.bids
-    
+
         while order.qty > 0 and book:
-            best_price = min(book.keys()) if side == "buy" else max(book.keys())
+            best_price = self.best_ask() if side == "buy" else self.best_bid()
+            if best_price is None:
+                break
             level = book[best_price]
-            best_order = level[0]  # maker
-    
-            trading_qty = min(order.qty, best_order.qty)
-    
-            order.qty -= trading_qty
-            best_order.qty -= trading_qty
-    
-            self.trades.append(
-                Trade(
-                    time = timestamp,
-                    price = best_price,
-                    qty = trading_qty,
-                    taker_order_id = order.id,
-                    maker_order_id = best_order.id,
-                    taker_side = side
-                )
-            )
-    
-            if best_order.qty == 0:
+            maker = level[0]
+            trade_qty = min(order.qty, maker.qty)
+
+            order.qty -= trade_qty
+            maker.qty -= trade_qty
+
+            self.trades.append(Trade(
+                time=timestamp,
+                taker_order_id=order.id,
+                maker_order_id=maker.id,
+                price=best_price,
+                qty=trade_qty,
+                taker_side=side
+            ))
+
+            if maker.qty == 0:
                 level.popleft()
                 if not level:
                     del book[best_price]
 
-    def cancel_order(self,order_id: int) -> bool:
-        for book in [self.bids, self.asks]:
-            for price, level in list(book.items()):
-                for order in list(level):
-                    if order.id == order_id:
-                        level.remove(order)
-                        if not level:
-                            del book[price]
-                        return True
-        return False
+        return order
 
-    def depth(self, n:int):
-        result = { "bids":[] , "asks":[]}
+    def cancel_order(self, order_id: int) -> bool:
+        info = self.order_index.pop(order_id, None)
+        if not info:
+            return False
+        side, price = info
+        book = self.bids if side == "buy" else self.asks
+        if price not in book:
+            return False
+        level = book[price]
+        for o in list(level):
+            if o.id == order_id:
+                level.remove(o)
+                break
+        else:
+            return False
+        if not level:
+            del book[price]
 
-        for price in sorted(self.bids.keys(), reverse= True)[:n]:
-            qty_total1 = sum(order.qty for order in self.bids[price])
-            result["bids"].append((price, qty_total1))
+        return True
+
+    def depth(self, n: int = 5):
+        result = {"bids": [], "asks": []}
+        for price in sorted(self.bids.keys(), reverse=True)[:n]:
+            qty_total = sum(o.qty for o in self.bids[price])
+            result["bids"].append((price, qty_total))
         for price in sorted(self.asks.keys())[:n]:
-            qty_total2 = sum(order.qty for order in self.asks[price])
-            result["asks"].append((price, qty_total2))
-        print(result)
+            qty_total = sum(o.qty for o in self.asks[price])
+            result["asks"].append((price, qty_total))
+        return result
         
 
 
