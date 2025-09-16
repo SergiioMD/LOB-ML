@@ -4,7 +4,7 @@ Simulation of market making strategies in financial markets, focusing on quantit
 
 ## Key Objects
 
-- Develop a realistic **limit order book simulatior** capable of limit and market orders.
+- Develop a realistic **Limit Order Book (LOB) simulator** capable of limit and market orders.
 - Implement classical **market making** strategies such as **Avellaneda-Stoikov** with proper inventory and risk managment.
   > "Market making is fundamentally about providing liquidity while controlling inventory risk."  
   > — *Avellaneda & Stoikov, 2008*
@@ -16,16 +16,23 @@ Simulation of market making strategies in financial markets, focusing on quantit
 
 ## Features 
 
-- **Flexible LOB(Limit Order Book)** it supports market and limit orders incluing time and ID'2
-- **Avellaneda-Stoikov** Classical risk-averse market making
+- **Flexible LOB** it supports market and limit orders incluing timestamps and unique ID's
+- **Avellaneda-Stoikov** classical risk-averse market making
 - **Multi-Agent** Having different agents that operate over the same market concluding in the evaluation of diferent startegies
-- **Future ML Integration**: Designing a self-learning model that operates in the market as an agent
+- **Future ML Integration**: design a self-learning agent capable of operating in the market autonomously 
 
-## Real World incoroporation Modifications
-Looking forward to incorporate the model when it is more advanced to the real world, therefore here are some of the ongoing modifiactions
-- Market API's incorporation, Live Market Feeds using Web-Socket for a lower latency
-- Training ML agents with real World Data (**backtesting**) +
-- Adding new strategies such as **position limits, Stop-Loss, Take-Profit, Capital Allocation, Slipapage and Transactions**
-- Looking forward to having a Lower Latencie to be able to replicate HFT strategies
+## Real World integration (Planned Modifications)
+
+Making the simulator applicable for real-world trading
+
+- **Market API's** incorporation and **Live Market Feeds** using Web-Socket for a lower latency
+- Training ML agents with real-world data (**backtesting**) 
+- Incorporating **risk management tools**: position limits, stop-loss, take-profit, capital allocation, slippage, and transaction costs
+- Optimizing for **ultra-low latencie** to replicate HFT 
 - Advanced Order Execution
 - Monitoring and Loggin
+
+## Future Work
+- Expand the simulator with additional **quantitative strategies**
+- Integrate **deep reinforcement learning agents** to act as adaptive market participants.
+- Conduct **stress tests** and **scenario analysis** to evaluate strategy robustness
